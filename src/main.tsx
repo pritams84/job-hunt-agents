@@ -15,7 +15,9 @@ const queryClient = new QueryClient({
   },
 })
 
-const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+const clerkPublishableKey =
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY ||
+  'pk_test_c2hpbmluZy10aWdlci03OTQ1LmNsZXJrLmFjY291bnRzLmRldiQ'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
