@@ -9,7 +9,8 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "server": "tsx server/index.ts"
+    "server": "tsx server/index.ts",
+    "dev:all": "concurrently -n \"vite,server\" -c \"cyan,magenta\" \"vite\" \"tsx server/index.ts\""
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.0.0",
@@ -23,6 +24,7 @@
     "express": "^5.2.1",
     "framer-motion": "^11.0.0",
     "gsap": "^3.12.0",
+    "jsonrepair": "^3.15.0",
     "lucide-react": "^0.344.0",
     "openai": "^7.21.0",
     "react": "^18.2.0",
@@ -44,6 +46,7 @@
     "@typescript-eslint/parser": "^7.0.0",
     "@vitejs/plugin-react": "^4.2.0",
     "autoprefixer": "^10.4.17",
+    "concurrently": "^10.0.5",
     "eslint": "^8.56.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
