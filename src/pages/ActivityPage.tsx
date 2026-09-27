@@ -1,145 +1,338 @@
-import { Filter, Download, Search, Activity } from 'lucide-react'
+import { Filter, Download, Search, Activity, RefreshCw, X, FileCode } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useState } from 'react'
-
-const events = [
-  { time: '14:22:15', type: 'APPLICATION_SUBMIT', message: 'Submitted application to Stripe — Senior Frontend Engineer', platform: 'Greenhouse', status: 'success' },
-  { time: '14:22:08', type: 'RESUME_TAILOR', message: 'Generated tailored resume for Vercel — Lead Frontend Architect', platform: 'System', status: 'info' },
-  { time: '14:22:04', type: 'MATCH_SCORING', message: 'Match score: 92% — Stripe Senior Frontend Engineer', platform: 'LinkedIn', status: 'info' },
-  { time: '14:22:01', type: 'DISCOVERY', message: 'Scanned Greenhouse board — 23 new listings', platform: 'Greenhouse', status: 'info' },
-  { time: '14:21:45', type: 'DISCOVERY', message: 'Scanned Lever board — 12 new listings', platform: 'Lever', status: 'info' },
-  { time: '14:21:32', type: 'MATCH_SCORING', message: 'Match score: 87% — Vercel Lead Frontend Architect', platform: 'LinkedIn', status: 'info' },
-  { time: '14:21:10', type: 'APPLICATION_SUBMIT', message: 'Submitted application to Linear — Staff Product Engineer', platform: 'Lever', status: 'success' },
-  { time: '14:20:55', type: 'MATCH_SCORING', message: 'Match score: 85% — Ramp Senior Backend Engineer', platform: 'LinkedIn', status: 'info' },
-  { time: '14:20:30', type: 'DISCOVERY', message: 'Scanned LinkedIn Jobs — 45 new listings', platform: 'LinkedIn', status: 'info' },
-  { time: '14:19:45', type: 'CAPTCHA_DETECTED', message: 'CAPTCHA detected on Workday — Human review required', platform: 'Workday', status: 'warning' },
-  { time: '14:19:20', type: 'ERROR', message: 'Rate limit hit on LinkedIn — Backing off 60s', platform: 'LinkedIn', status: 'error' },
-  { time: '14:18:50', type: 'APPLICATION_SUBMIT', message: 'Submitted application to Notion — Full Stack Engineer', platform: 'Greenhouse', status: 'success' },
-]
+import { useState, useMemo } from 'react'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { useActivityLog, FormattedActivity } from '@/hooks/useActivityLog'
+import { AgentEventType } from '@/types'
+import { Skeleton, GlassCard, Button } from '@/components/ui'
 
 const typeConfig: Record<string, { icon: string; color: string; label: string }> = {
-  DISCOVERY: { icon: '🔍', color: 'text-accent-secondary', label: 'DISCOVERY' },
-  MATCH_SCORING: { icon: '🧠', color: 'text-accent-primary', label: 'MATCH' },
-  RESUME_TAILOR: { icon: '📝', color: 'text-accent-ai', label: 'TAILOR' },
-  APPLICATION_SUBMIT: { icon: '✅', color: 'text-accent-cta', label: 'SUBMIT' },
-  CAPTCHA_DETECTED: { icon: '⚠️', color: 'text-accent-warning', label: 'CAPTCHA' },
-  ERROR: { icon: '❌', color: 'text-accent-danger', label: 'ERROR' },
+  submitted: { icon: '✅', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', label: 'SUBMISSION' },
+  matched: { icon: '🧠', color: 'text-violet-400 bg-violet-500/10 border-violet-500/20', label: 'MATCH_SCORE' },
+  searched: { icon: '🔍', color: 'text-sky-400 bg-sky-500/10 border-sky-500/20', label: 'DISCOVERY' },
+  generated_content: { icon: '📝', color: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20', label: 'TAILOR_AI' },
+  status_changed: { icon: '🔄', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', label: 'STATUS_SYNC' },
+  captcha_detected: { icon: '⚠️', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20', label: 'CAPTCHA' },
+  quota_reached: { icon: '🛑', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20', label: 'QUOTA' },
+  error: { icon: '❌', color: 'text-rose-400 bg-rose-500/10 border-rose-500/20', label: 'ERROR' },
+  skipped: { icon: '⏭️', color: 'text-neutral-400 bg-white/5 border-white/10', label: 'SKIPPED' },
+  filled_field: { icon: '✍️', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20', label: 'FORM_FIELD' },
 }
 
+const filterTypes: Array<{ key: string; label: string }> = [
+  { key: 'ALL', label: 'All Events' },
+  { key: 'searched', label: 'Discovery' },
+  { key: 'matched', label: 'Match Scoring' },
+  { key: 'generated_content', label: 'Resume Tailor' },
+  { key: 'submitted', label: 'Submission' },
+  { key: 'status_changed', label: 'Status Updates' },
+  { key: 'captcha_detected', label: 'CAPTCHA' },
+  { key: 'error', label: 'Errors' },
+]
+
 export function ActivityPage() {
-  const [dateRange, setDateRange] = useState('today')
+  const { data: currentUser } = useCurrentUser()
+  const { formattedActivities, isLoading, refetch } = useActivityLog(currentUser?.id, 100)
+
+  const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'all'>('all')
   const [typeFilter, setTypeFilter] = useState<string[]>(['ALL'])
   const [search, setSearch] = useState('')
+  const [inspectEvent, setInspectEvent] = useState<FormattedActivity | null>(null)
+
+  const filteredLogs = useMemo(() => {
+    return formattedActivities.filter((event) => {
+      // 1. Type filter
+      if (!typeFilter.includes('ALL') && !typeFilter.includes(event.type)) {
+        return false
+      }
+
+      // 2. Search query filter
+      if (search.trim()) {
+        const q = search.toLowerCase()
+        const matchMsg = event.message.toLowerCase().includes(q)
+        const matchPlatform = event.platform.toLowerCase().includes(q)
+        const matchType = event.type.toLowerCase().includes(q)
+        if (!matchMsg && !matchPlatform && !matchType) return false
+      }
+
+      // 3. Date range filter
+      if (dateRange !== 'all') {
+        const eventDate = new Date(event.created_at).getTime()
+        const now = Date.now()
+        if (isNaN(eventDate)) return true
+
+        if (dateRange === 'today' && now - eventDate > 24 * 60 * 60 * 1000) return false
+        if (dateRange === 'week' && now - eventDate > 7 * 24 * 60 * 60 * 1000) return false
+        if (dateRange === 'month' && now - eventDate > 30 * 24 * 60 * 60 * 1000) return false
+      }
+
+      return true
+    })
+  }, [formattedActivities, typeFilter, search, dateRange])
+
+  const exportCsv = () => {
+    if (filteredLogs.length === 0) return
+
+    const headers = ['ID', 'Timestamp', 'Event Type', 'Message', 'Platform', 'Status']
+    const rows = filteredLogs.map((log) => [
+      log.id,
+      log.created_at,
+      log.type,
+      `"${log.message.replace(/"/g, '""')}"`,
+      log.platform,
+      log.status,
+    ])
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `agent_activity_${new Date().toISOString().slice(0, 10)}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary">Activity Log</h1>
-        <p className="text-text-secondary text-sm">Full audit trail of everything your AI agents did</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Activity Log</h1>
+          <p className="text-neutral-400 text-sm">
+            Live forensic audit trail and telemetry from all autonomous agent executions
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => refetch()}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={exportCsv}
+            disabled={filteredLogs.length === 0}
+            className="flex items-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="card-glass p-4 space-y-4">
+      {/* Filter and Search Bar */}
+      <GlassCard className="p-4 space-y-4">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-muted" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
             <input
               type="text"
-              placeholder="Search activity..."
+              placeholder="Search by event message, platform, or type..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="glass-input pl-10"
+              className="glass-input pl-10 text-sm w-full"
             />
           </div>
-          <div className="flex flex-wrap gap-2">
-            <select className="glass-input py-2 px-3 text-sm" value={dateRange} onChange={(e) => setDateRange(e.target.value)}>
-              <option value="today">Today</option>
-              <option value="week">This Week</option>
-              <option value="month">This Month</option>
-              <option value="all">All Time</option>
+
+          <div className="flex items-center gap-2">
+            <select
+              className="glass-input py-2 px-3 text-sm"
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value as any)}
+            >
+              <option value="today">Today (24h)</option>
+              <option value="week">Past 7 Days</option>
+              <option value="month">Past 30 Days</option>
+              <option value="all">All History</option>
             </select>
-            <button className="btn-secondary px-4 py-2 flex items-center gap-2">
-              <Filter className="w-4 h-4" />
-              Event Types
-            </button>
-            <button className="btn-secondary px-4 py-2 flex items-center gap-2">
-              <Download className="w-4 h-4" />
-              Export CSV
-            </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {['ALL', 'DISCOVERY', 'MATCH_SCORING', 'RESUME_TAILOR', 'APPLICATION_SUBMIT', 'CAPTCHA_DETECTED', 'ERROR'].map((type) => (
+        {/* Type Filter Pills */}
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-white/[0.05]">
+          {filterTypes.map((item) => (
             <button
-              key={type}
-              onClick={() => setTypeFilter(prev => {
-                if (prev.includes('ALL')) return [type]
-                if (prev.includes(type)) return prev.filter(t => t !== type)
-                return [...prev, type]
-              })}
+              key={item.key}
+              onClick={() =>
+                setTypeFilter((prev) => {
+                  if (item.key === 'ALL') return ['ALL']
+                  const withoutAll = prev.filter((t) => t !== 'ALL')
+                  if (withoutAll.includes(item.key)) {
+                    const remaining = withoutAll.filter((t) => t !== item.key)
+                    return remaining.length === 0 ? ['ALL'] : remaining
+                  }
+                  return [...withoutAll, item.key]
+                })
+              }
               className={cn(
-                'px-3 py-1 rounded-full text-xs font-medium transition-colors',
-                typeFilter.includes(type) || (typeFilter.includes('ALL') && type === 'ALL')
-                  ? 'bg-accent-primary/20 text-accent-primary border border-accent-primary/30'
-                  : 'bg-white/5 text-text-secondary hover:bg-white/10'
+                'px-3 py-1 rounded-full text-xs font-medium transition-colors border',
+                typeFilter.includes(item.key) || (typeFilter.includes('ALL') && item.key === 'ALL')
+                  ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
+                  : 'bg-white/[0.03] text-neutral-400 border-white/[0.06] hover:bg-white/[0.08]'
               )}
             >
-              {type}
+              {item.label}
             </button>
           ))}
         </div>
-      </div>
+      </GlassCard>
 
       {/* Activity Table */}
-      <div className="card-glass overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-white/5">
-              {['Time', 'Event Type', 'Description', 'Platform', 'Status', 'Payload'].map((col) => (
-                <th key={col} className="px-4 py-3 text-left text-sm font-medium text-text-secondary">
-                  {col}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {events
-              .filter(e => typeFilter.includes('ALL') || typeFilter.includes(e.type))
-              .filter(e => search === '' || e.message.toLowerCase().includes(search.toLowerCase()))
-              .map((event, idx) => {
-                const config = typeConfig[event.type] || { icon: '📋', color: 'text-text-muted', label: event.type }
-                return (
-                  <tr key={idx} className="border-b border-white/5 hover:bg-white/5">
-                    <td className="px-4 py-3 font-mono text-sm text-text-secondary">{event.time}</td>
-                    <td className="px-4 py-3">
-                      <span className={cn('px-2 py-1 rounded text-xs font-medium font-mono', config.color)}>
-                        {config.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-text-primary max-w-md truncate">{event.message}</td>
-                    <td className="px-4 py-3 text-text-secondary">{event.platform}</td>
-                    <td className="px-4 py-3">
-                      <span className={cn('px-2 py-1 rounded-full text-xs font-medium',
-                        event.status === 'success' && 'bg-accent-cta/20 text-accent-cta',
-                        event.status === 'warning' && 'bg-accent-warning/20 text-accent-warning',
-                        event.status === 'error' && 'bg-accent-danger/20 text-accent-danger',
-                        event.status === 'info' && 'bg-accent-secondary/20 text-accent-secondary'
-                      )}>
-                        {event.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <button className="btn-ghost p-1 text-text-muted hover:text-text-primary">
-                        <Activity className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-          </tbody>
-        </table>
-      </div>
+      <GlassCard className="overflow-hidden p-0 border border-white/[0.08]">
+        {isLoading ? (
+          <div className="p-6 space-y-4">
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : filteredLogs.length === 0 ? (
+          <div className="py-16 text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-white/[0.05] border border-white/10 flex items-center justify-center mx-auto text-neutral-400">
+              <Activity className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-medium text-white">No activity events found</h3>
+            <p className="text-xs text-neutral-400 max-w-sm mx-auto">
+              {search || !typeFilter.includes('ALL')
+                ? 'No activity logs match your active filters.'
+                : 'Your autonomous agents will log discovery, scoring, and submission events here as they execute.'}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-white/[0.06] bg-white/[0.02]">
+                  <th className="px-4 py-3.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider font-mono">
+                    Time
+                  </th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                    Event Type
+                  </th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                    Description
+                  </th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                    Source
+                  </th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider text-right">
+                    Payload
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {filteredLogs.map((event) => {
+                  const config = typeConfig[event.type] || {
+                    icon: '📋',
+                    color: 'text-neutral-400 bg-white/5 border-white/10',
+                    label: event.type.toUpperCase(),
+                  }
+
+                  return (
+                    <tr
+                      key={event.id}
+                      className="hover:bg-white/[0.02] transition-colors group"
+                    >
+                      <td className="px-4 py-3.5 font-mono text-xs text-neutral-400 whitespace-nowrap">
+                        {event.time}
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <span
+                          className={cn(
+                            'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border font-mono',
+                            config.color
+                          )}
+                        >
+                          <span>{config.icon}</span>
+                          <span>{config.label}</span>
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-neutral-200 max-w-md break-words">
+                        {event.message}
+                      </td>
+                      <td className="px-4 py-3.5 text-xs text-neutral-400 whitespace-nowrap">
+                        {event.platform}
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <span
+                          className={cn(
+                            'px-2 py-0.5 rounded-full text-xs font-medium capitalize',
+                            event.status === 'success' && 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
+                            event.status === 'warning' && 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
+                            event.status === 'error' && 'bg-rose-500/10 text-rose-400 border border-rose-500/20',
+                            event.status === 'info' && 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+                          )}
+                        >
+                          {event.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                        <button
+                          onClick={() => setInspectEvent(event)}
+                          title="View JSON payload"
+                          className="p-1.5 rounded-lg bg-white/[0.04] text-neutral-400 hover:text-white hover:bg-white/[0.1] transition-colors"
+                        >
+                          <FileCode className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </GlassCard>
+
+      {/* JSON Payload Inspection Modal */}
+      {inspectEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#0c0d12] border border-white/10 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+              <div className="flex items-center gap-2">
+                <FileCode className="w-5 h-5 text-violet-400" />
+                <h3 className="text-base font-semibold text-white">Event Telemetry Payload</h3>
+              </div>
+              <button
+                onClick={() => setInspectEvent(null)}
+                className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="grid grid-cols-2 gap-2 text-neutral-400">
+                <div><span className="text-neutral-500">Event Type:</span> {inspectEvent.type}</div>
+                <div><span className="text-neutral-500">Logged At:</span> {inspectEvent.created_at}</div>
+                <div><span className="text-neutral-500">Platform:</span> {inspectEvent.platform}</div>
+                <div><span className="text-neutral-500">Status:</span> {inspectEvent.status}</div>
+              </div>
+            </div>
+
+            <div className="bg-black/70 rounded-xl p-4 border border-white/[0.06] overflow-x-auto max-h-80">
+              <pre className="font-mono text-xs text-neutral-300">
+                {JSON.stringify(inspectEvent.payload, null, 2)}
+              </pre>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button size="sm" variant="secondary" onClick={() => setInspectEvent(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

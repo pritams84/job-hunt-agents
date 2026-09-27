@@ -1,6 +1,9 @@
-import { Upload, FileText, Briefcase, MapPin, DollarSign, Shield, CheckCircle, ChevronRight, Zap, Settings, Link, Mail, Github, Globe, Clock } from 'lucide-react'
+import { Upload, FileText, Briefcase, MapPin, DollarSign, Shield, CheckCircle, ChevronRight, Zap, Settings, Link, Mail, Github, Globe, Clock, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useProfile } from '@/hooks/useProfile'
+import { parseResumeText } from '@/lib/agents/parser'
 
 const steps = [
   { id: 1, title: 'Resume Upload', desc: 'Upload your resume for AI parsing', icon: FileText },
@@ -10,31 +13,81 @@ const steps = [
 ]
 
 export function OnboardingPage() {
+  const navigate = useNavigate()
+  const { saveProfile, isSaving } = useProfile()
   const [currentStep, setCurrentStep] = useState(1)
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [parsing, setParsing] = useState(false)
   const [parsedData, setParsedData] = useState<any>(null)
+  const [roles, setRoles] = useState<string[]>(['AI Engineer', 'Software Engineer'])
+  const [locations, setLocations] = useState<string[]>(['Remote', 'San Francisco, CA'])
+  const [minSalary, setMinSalary] = useState<number>(140000)
+  const [autonomyMode, setAutonomyMode] = useState<'review' | 'auto'>('auto')
 
   const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, 4))
   const prevStep = () => setCurrentStep(prev => Math.max(prev - 1, 1))
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
       setResumeFile(file)
       setParsing(true)
-      // Simulate parsing
-      setTimeout(() => {
+      try {
+        const text = await file.text()
+        if (text && text.length > 50) {
+          const parsed = await parseResumeText(text)
+          setParsedData(parsed)
+          if (parsed.skills?.primary?.length) {
+            setRoles([`${parsed.skills.primary[0]} Engineer`, 'AI Engineer'])
+          }
+        } else {
+          // Fallback extracted structure
+          setParsedData({
+            personal: { full_name: file.name.replace(/\.[^/.]+$/, ''), email: '', phone: '', location: { city: 'Remote', state: '', country: '', timezone: '' } },
+            summary: 'Experienced software engineer',
+            experience: [],
+            skills: { primary: ['Python', 'React', 'TypeScript'], secondary: [], tools_and_platforms: [] },
+          })
+        }
+      } catch {
+        // Fallback for binary PDF/DOCX preview
         setParsedData({
-          personal: { full_name: 'John Doe', email: 'john@example.com', phone: '+1 555 123 4567', location: { city: 'San Francisco', state: 'CA', country: 'US', timezone: 'UTC-8' } },
-          summary: 'Senior Frontend Engineer with 8+ years experience...',
-          experience: [{ company: 'Stripe', title: 'Senior Frontend Engineer', start_date: '2022-01', end_date: 'Present', highlights: ['Led dashboard redesign'], technologies: ['React', 'TypeScript'] }],
-          skills: { primary: ['React', 'TypeScript', 'Next.js'], secondary: ['Python', 'Go'], tools_and_platforms: ['Git', 'Docker', 'AWS'] },
+          personal: { full_name: file.name.replace(/\.[^/.]+$/, ''), email: '', phone: '', location: { city: 'Remote', state: '', country: '', timezone: '' } },
+          summary: 'Experienced software professional',
+          experience: [],
+          skills: { primary: ['AI / ML', 'Python', 'FastAPI'], secondary: ['Docker'], tools_and_platforms: [] },
         })
+      } finally {
         setParsing(false)
         nextStep()
-      }, 2000)
+      }
     }
+  }
+
+  const handleComplete = async () => {
+    try {
+      await saveProfile({
+        parsed_json: parsedData || {},
+        preferences: {
+          target_roles: roles,
+          locations: locations,
+          salary_min: minSalary,
+          remote_ok: true,
+          target_seniority: ['Senior', 'Mid-Level'],
+          salary_currency: 'USD',
+          visa_sponsorship_needed: false,
+        },
+        rules: {
+          autonomy_mode: autonomyMode,
+          min_match_score: 85,
+          blacklist_companies: [],
+          max_applications_per_day: 15,
+        },
+      })
+    } catch (err) {
+      console.warn('Profile save warning (proceeding to dashboard):', err)
+    }
+    navigate('/dashboard')
   }
 
   return (
@@ -277,11 +330,21 @@ export function OnboardingPage() {
             Back
           </button>
           <button
-            onClick={currentStep === 4 ? () => alert('Onboarding complete! Redirecting to dashboard...') : nextStep}
+            onClick={currentStep === 4 ? handleComplete : nextStep}
+            disabled={isSaving}
             className="btn-cta px-6 py-2 flex items-center gap-2"
           >
-            {currentStep === 4 ? 'Complete Setup' : 'Continue'}
-            <ChevronRight className="w-4 h-4" />
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Saving Profile...
+              </>
+            ) : (
+              <>
+                {currentStep === 4 ? 'Complete Setup' : 'Continue'}
+                <ChevronRight className="w-4 h-4" />
+              </>
+            )}
           </button>
         </div>
       </div>

@@ -11,33 +11,65 @@ import { supabaseAdmin } from '../server/supabase'
 import { CandidateProfile, JobListing, StandardAnswers } from '../src/types'
 
 const SAMPLE_RESUME_TEXT = `
-Pritam Singh
-Full Stack Software Engineer
-Email: pritam.singh@example.com | Phone: +1-555-0199
-Location: San Francisco, CA (US Citizen, No Sponsorship Needed)
+PRITAM SINGH
+AI Engineer | Speech AI | Computer Vision | Edge AI | Generative AI
+India | +91 84480 23794 | pritamsinghrajput84480@gmail.com
 LinkedIn: https://linkedin.com/in/pritams84 | GitHub: https://github.com/pritams84
 
-PROFESSIONAL SUMMARY
-Results-driven Full Stack Engineer with 5+ years of experience building high-scale web applications, microservices, and AI-driven platforms. Expert in React, TypeScript, Next.js, Node.js, and PostgreSQL. Proven track record reducing API latency by 40% and deploying mission-critical systems.
+Professional Summary
+AI Engineer with hands-on experience building and deploying production AI systems across Speech AI, Computer Vision, Edge AI, and Generative AI. Experienced in developing multilingual speech pipelines using WhisperX, Indic ASR, VAD, Pyannote.audio, and speaker embeddings, building LLM-powered conversation intelligence systems, and deploying real-time Computer Vision workloads on Raspberry Pi and Google Coral Edge TPU. Strong experience with Python, FastAPI, PostgreSQL, PyTorch, CUDA, Linux, Docker, GPU optimization, AI evaluation, and production debugging.
 
-WORK EXPERIENCE
-Senior Frontend Engineer | CloudScale Inc. | Jan 2022 - Present
-- Architected modular React 18 / TypeScript frontend architecture handling 2.5M monthly active users with sub-100ms interaction latency.
-- Built reusable component library using Tailwind CSS and Radix UI primitives, accelerating engineering velocity by 35%.
-- Integrated Supabase Realtime and pgvector for semantic search and live collaborative workflows.
+Professional Experience
+Mialo Technologies | 2026 – Present
+AI Engineer | India
 
-Full Stack Software Engineer | DevWorks Labs | Jun 2019 - Dec 2021
-- Developed REST and GraphQL APIs with Node.js, Express, and PostgreSQL handling 15,000 requests per minute.
-- Designed automated CI/CD deployment pipelines using Docker, GitHub Actions, and AWS ECS.
-- Implemented Stripe billing integration for SaaS subscription tiers with automatic webhook reconciliation.
+TalkSense – AI Sales Assistant & Conversation Intelligence
+• Engineered a production Conversation Intelligence and Speech Analytics platform for ingesting, transcribing, analyzing, and scoring real-world sales conversations.
+• Developed a multilingual Speech AI pipeline supporting English, Hindi, Bengali, and mixed-language conversations using WhisperX, Indic ASR, Silero VAD, Pyannote.audio, and WeSpeaker.
+• Implemented speaker diarization and Agent/Customer identification using voice embeddings, speaker enrollment, and cosine-similarity matching.
+• Built asynchronous FastAPI + PostgreSQL + SQLAlchemy architecture with dedicated AI workers, separating API workloads from GPU/CPU-intensive processing.
+• Implemented reliable processing lifecycle using PENDING → IN_PROGRESS → COMPLETED/FAILED, including failure handling, recovery, reconciliation, and orphan-session management.
+• Integrated Llama 3.1 via Ollama for script adherence, objection handling, customer sentiment, buying signals, communication quality, and sales coaching analytics.
+• Developed recording-ingestion workflows for Zoom, Google Meet, and Microsoft Teams and designed realtime conversation-intelligence workflows.
+• Designed a wearable ambient-audio intelligence architecture supporting realtime provisional analysis and GPU-based batch finalization for high-accuracy transcription and analytics.
+• Optimized long-form speech processing for an NVIDIA RTX 5060 8GB GPU, addressing VRAM, CUDA/cuBLAS, model-loading, VAD, and inference reliability challenges.
+• Built evaluation workflows covering WER, CER, segmentation F1, diarization, speaker-role classification, audio coverage, and end-to-end pipeline accuracy.
+• Performed production debugging across Linux, CUDA, PyTorch, FFmpeg, GPU memory, networking, audio processing, and backend services.
+Technologies: Python, FastAPI, PostgreSQL, SQLAlchemy, PyTorch, WhisperX, Indic ASR, Silero VAD, Pyannote.audio, WeSpeaker, Llama 3.1, Ollama, CUDA, Docker, Linux
 
-EDUCATION
-B.S. in Computer Science | University of California, Berkeley | 2015 - 2019
+RetailSense – Edge AI Retail Analytics
+• Deployed real-time Computer Vision inference on Raspberry Pi 4 + Google Coral Edge TPU for retail analytics.
+• Integrated RTSP camera streams and optimized FPS, inference latency, CPU utilization, memory usage, and Edge TPU performance.
+• Diagnosed production issues involving Linux, USB communication, networking, RTSP, Edge TPU runtime, and systemd services.
+• Integrated edge inference with backend APIs for production analytics workflows.
+Technologies: Python, FastAPI, Raspberry Pi, Google Coral Edge TPU, OpenCV, TensorFlow Lite, RTSP, Linux, systemd
 
-TECHNICAL SKILLS
-- Primary: React, TypeScript, JavaScript, Next.js, Node.js, Express
-- Secondary: Python, PostgreSQL, REST APIs, GraphQL, Redis
-- Tools & Platforms: Docker, Git, Supabase, Stripe, Tailwind CSS, Playwright
+Carton Box Detection & OCR System
+• Developed a YOLO-based Computer Vision pipeline for automated carton detection and integrated OCR for extracting labels and textual information.
+• Applied image preprocessing and model optimization techniques to improve detection and OCR reliability for warehouse automation.
+
+Technical Skills
+Languages: Python, SQL
+AI / ML: Machine Learning, Computer Vision, Speech AI, Multilingual ASR, Speaker Diarization, Voice Embeddings, Generative AI, LLMs, Model Optimization
+Speech AI: WhisperX, Indic ASR, Pyannote.audio, WeSpeaker, Silero VAD, Librosa, PyDub, VADER
+Computer Vision: YOLO, OpenCV, TensorFlow Lite, OCR, Object Detection, Image Processing
+LLM / GenAI: Llama 3.1, Ollama, LLM-based Analytics, Prompt Engineering
+Backend: FastAPI, REST APIs, SQLAlchemy, Pydantic, JWT, RBAC, Asynchronous Processing, Microservices
+Infrastructure: PyTorch, CUDA, Docker, Linux, Raspberry Pi, Google Coral Edge TPU, RTSP, SSH, systemd, Git, GitHub
+Databases: PostgreSQL, MySQL
+
+Education
+Amity University, Jharkhand | 2022 – 2026
+Bachelor of Technology (B.Tech) – Computer Science and Engineering
+
+Certifications
+• Generative AI Foundations – UpGrad, 2025
+• Core Java Fundamentals – Udemy, 2024
+
+Achievements
+• 2nd Place among 60+ teams in an Idea, Innovation & Software Prototype Competition.
+• Captain, B.Tech Cricket Team – led the team to a Runner-Up position.
+• Department Representative for 1,400+ students – organized technical events and workshops.
 `
 
 async function main() {

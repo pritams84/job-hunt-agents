@@ -1,10 +1,14 @@
-import { User, Mail, Phone, MapPin, Link, Github, Globe, Settings, Plus, Trash2, Edit2, Save, X, Check, AlertTriangle } from 'lucide-react'
+import { User, Mail, Phone, MapPin, Link, Github, Globe, Settings, Plus, Trash2, Edit2, Save, X, Check, AlertTriangle, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
+import { useProfile } from '@/hooks/useProfile'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
 
 export function ProfilePage() {
   const [activeTab, setActiveTab] = useState<'profile' | 'experience' | 'skills' | 'preferences' | 'answers' | 'autonomy'>('profile')
-  const [editing, setEditing] = useState<string | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const { profile, isLoading, saveProfile, isSaving } = useProfile()
+  const { data: currentUser } = useCurrentUser()
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
@@ -14,6 +18,13 @@ export function ProfilePage() {
     { id: 'answers', label: 'Screening Answers', icon: Mail },
     { id: 'autonomy', label: 'Autonomy', icon: Settings },
   ]
+
+  // Dynamic user data from API with clean fallbacks
+  const candidateName = profile?.parsed_json?.personal?.full_name || `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim() || 'Pritam Singh'
+  const candidateEmail = profile?.parsed_json?.personal?.email || currentUser?.email || 'pritamsinghrajput84480@gmail.com'
+  const candidatePhone = profile?.parsed_json?.personal?.phone || '+91 84480 23794'
+  const candidateLocation = profile?.parsed_json?.personal?.location?.city || 'India'
+  const candidateSummary = profile?.parsed_json?.summary || 'AI Engineer · Speech AI · Computer Vision · Edge AI · Generative AI'
 
   return (
     <div className="space-y-6">
@@ -32,19 +43,22 @@ export function ProfilePage() {
           <div className="flex-1">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-text-primary">John Doe</h2>
-                <p className="text-text-secondary">Senior Frontend Engineer</p>
+                <h2 className="text-2xl font-bold text-text-primary">{candidateName}</h2>
+                <p className="text-text-secondary">{candidateSummary}</p>
               </div>
-              <button className="btn-secondary px-4 py-2 flex items-center gap-2">
-                <Edit2 className="w-4 h-4" />
-                Edit Profile
+              <button 
+                onClick={() => setIsEditing(!isEditing)} 
+                className="btn-secondary px-4 py-2 flex items-center gap-2"
+              >
+                {isEditing ? <Check className="w-4 h-4 text-accent-cta" /> : <Edit2 className="w-4 h-4" />}
+                {isEditing ? 'Done Editing' : 'Edit Profile'}
               </button>
             </div>
             <div className="flex flex-wrap gap-6 mt-4 text-sm">
-              <span className="flex items-center gap-1 text-text-secondary"><Mail className="w-4 h-4" /> john@example.com</span>
-              <span className="flex items-center gap-1 text-text-secondary"><Phone className="w-4 h-4" /> +1 (555) 123-4567</span>
-              <span className="flex items-center gap-1 text-text-secondary"><MapPin className="w-4 h-4" /> San Francisco, CA</span>
-              <span className="flex items-center gap-1 text-text-secondary"><Globe className="w-4 h-4" /> UTC-8</span>
+              <span className="flex items-center gap-1 text-text-secondary"><Mail className="w-4 h-4" /> {candidateEmail}</span>
+              <span className="flex items-center gap-1 text-text-secondary"><Phone className="w-4 h-4" /> {candidatePhone}</span>
+              <span className="flex items-center gap-1 text-text-secondary"><MapPin className="w-4 h-4" /> {candidateLocation}</span>
+              <span className="flex items-center gap-1 text-text-secondary"><Globe className="w-4 h-4" /> Active on Supabase</span>
             </div>
           </div>
         </div>
@@ -80,10 +94,14 @@ export function ProfilePage() {
               <div>
                 <h3 className="font-semibold text-text-primary mb-4">Links & Profiles</h3>
                 <div className="space-y-3">
-                  {['LinkedIn', 'GitHub', 'Portfolio'].map((link) => (
-                    <div key={link} className="flex items-center gap-3">
-                      <label className="w-24 text-sm text-text-secondary">{link}</label>
-                      <input type="url" placeholder={`https://${link.toLowerCase()}.com/username`} className="glass-input flex-1" />
+                  {[
+                    { label: 'LinkedIn', url: 'https://linkedin.com/in/pritams84' },
+                    { label: 'GitHub', url: 'https://github.com/pritams84' },
+                    { label: 'Portfolio', url: 'https://github.com/pritams84' },
+                  ].map((link) => (
+                    <div key={link.label} className="flex items-center gap-3">
+                      <label className="w-24 text-sm text-text-secondary">{link.label}</label>
+                      <input type="url" defaultValue={link.url} className="glass-input flex-1" />
                     </div>
                   ))}
                 </div>
@@ -94,10 +112,22 @@ export function ProfilePage() {
           {activeTab === 'experience' && (
             <div className="space-y-4 max-w-3xl">
               <h3 className="font-semibold text-text-primary mb-4">Work Experience</h3>
-              <div className="space-y-4 border-l-2 border-white/10 pl-6">
+              <div className="space-y-6 border-l-2 border-white/10 pl-6">
                 {[
-                  { company: 'Stripe', title: 'Senior Frontend Engineer', location: 'San Francisco, CA', start: '2022-01', end: 'Present', highlights: ['Led redesign of dashboard', 'Improved performance by 40%'], tech: ['React', 'TypeScript', 'GraphQL'] },
-                  { company: 'Vercel', title: 'Frontend Engineer', location: 'Remote', start: '2019-06', end: '2021-12', highlights: ['Built Next.js commerce features', 'Open source contributions'], tech: ['Next.js', 'React', 'Rust'] },
+                  {
+                    company: 'Mialo Technologies',
+                    title: 'AI Engineer',
+                    location: 'India',
+                    start: '2026',
+                    end: 'Present',
+                    highlights: [
+                      'TalkSense: Engineered production Conversation Intelligence & Speech Analytics platform with WhisperX, Indic ASR, and Pyannote.audio',
+                      'RetailSense: Deployed real-time Computer Vision inference on Raspberry Pi 4 + Google Coral Edge TPU',
+                      'Carton Box Detection: Developed YOLO-based Computer Vision pipeline with OCR text extraction',
+                      'Optimized long-form speech processing for NVIDIA RTX 5060 8GB GPU addressing VRAM and CUDA inference latency',
+                    ],
+                    tech: ['Python', 'FastAPI', 'PyTorch', 'WhisperX', 'Indic ASR', 'YOLO', 'Google Coral TPU', 'Llama 3.1', 'Docker'],
+                  },
                 ].map((exp, idx) => (
                   <div key={idx} className="relative pb-6 before:absolute before:left-[-8px] before:top-0 before:w-3 before:h-3 before:rounded-full before:bg-accent-primary">
                     <div className="flex items-start justify-between">
@@ -111,7 +141,7 @@ export function ProfilePage() {
                       {exp.tech.map(t => <span key={t} className="px-2 py-0.5 rounded bg-white/5 text-xs text-text-secondary border border-white/10">{t}</span>)}
                     </div>
                     <ul className="mt-2 space-y-1">
-                      {exp.highlights.map((h, i) => <li key={i} className="text-sm text-text-secondary flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-accent-primary" />{h}</li>)}
+                      {exp.highlights.map((h, i) => <li key={i} className="text-sm text-text-secondary flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-accent-primary flex-shrink-0" />{h}</li>)}
                     </ul>
                   </div>
                 ))}
@@ -123,9 +153,9 @@ export function ProfilePage() {
             <div className="space-y-6 max-w-3xl">
               <h3 className="font-semibold text-text-primary mb-4">Technical Skills</h3>
               <div>
-                <h4 className="text-sm font-medium text-text-secondary mb-3">Primary</h4>
+                <h4 className="text-sm font-medium text-text-secondary mb-3">AI / ML & Speech AI</h4>
                 <div className="flex flex-wrap gap-2">
-                  {['React', 'TypeScript', 'Next.js', 'GraphQL', 'Tailwind CSS', 'Node.js'].map(s => (
+                  {['Machine Learning', 'Computer Vision', 'Speech AI', 'Multilingual ASR', 'WhisperX', 'Indic ASR', 'Pyannote.audio', 'WeSpeaker', 'Silero VAD', 'Llama 3.1', 'Ollama'].map(s => (
                     <span key={s} className="px-3 py-1.5 rounded-full bg-accent-primary/20 text-accent-primary text-sm font-medium border border-accent-primary/30 flex items-center gap-1">
                       {s}
                     </span>
@@ -133,17 +163,17 @@ export function ProfilePage() {
                 </div>
               </div>
               <div>
-                <h4 className="text-sm font-medium text-text-secondary mb-3">Secondary</h4>
+                <h4 className="text-sm font-medium text-text-secondary mb-3">Computer Vision & Edge AI</h4>
                 <div className="flex flex-wrap gap-2">
-                  {['Python', 'Go', 'Rust', 'PostgreSQL', 'Redis', 'Docker', 'Kubernetes', 'AWS'].map(s => (
+                  {['YOLO', 'OpenCV', 'TensorFlow Lite', 'OCR', 'Google Coral Edge TPU', 'Raspberry Pi 4', 'RTSP'].map(s => (
                     <span key={s} className="px-3 py-1.5 rounded-full bg-white/5 text-text-secondary text-sm border border-white/10">{s}</span>
                   ))}
                 </div>
               </div>
               <div>
-                <h4 className="text-sm font-medium text-text-secondary mb-3">Tools & Platforms</h4>
+                <h4 className="text-sm font-medium text-text-secondary mb-3">Backend & Infrastructure</h4>
                 <div className="flex flex-wrap gap-2">
-                  {['Git', 'GitHub Actions', 'Vercel', 'Linear', 'Figma', 'Postman'].map(s => (
+                  {['Python', 'SQL', 'FastAPI', 'PostgreSQL', 'SQLAlchemy', 'PyTorch', 'CUDA', 'Docker', 'Linux', 'systemd', 'Git'].map(s => (
                     <span key={s} className="px-3 py-1.5 rounded-full bg-white/5 text-text-secondary text-sm border border-white/10">{s}</span>
                   ))}
                 </div>
@@ -158,7 +188,7 @@ export function ProfilePage() {
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-2">Target Roles</label>
                   <div className="flex flex-wrap gap-2">
-                    {['Senior Frontend Engineer', 'Lead Frontend Engineer', 'Staff Engineer', 'Frontend Architect'].map(r => (
+                    {['AI Engineer', 'Speech AI Engineer', 'Computer Vision Engineer', 'Machine Learning Engineer', 'Edge AI Engineer'].map(r => (
                       <span key={r} className="px-3 py-1 rounded-full bg-accent-primary/20 text-accent-primary text-sm border border-accent-primary/30 flex items-center gap-1">
                         {r}
                         <button className="ml-1 hover:text-accent-warning"><X className="w-3 h-3" /></button>

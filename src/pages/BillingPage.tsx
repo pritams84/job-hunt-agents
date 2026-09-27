@@ -1,24 +1,86 @@
-import { CreditCard, Download, CheckCircle, ArrowUpRight } from 'lucide-react'
+import { CreditCard, Download, CheckCircle, ArrowUpRight, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { SUBSCRIPTION_TIERS } from '@/types'
+import { useState } from 'react'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { useQuota } from '@/hooks/useQuota'
+import { SUBSCRIPTION_TIERS, SubscriptionTier } from '@/types'
 
 export function BillingPage() {
-  const currentTier = 'pro' as const
-  const tierConfig = SUBSCRIPTION_TIERS[currentTier]
-  const used = 34
-  const dailyUsed = 6
+  const { data: currentUser } = useCurrentUser()
+  const {
+    subscription,
+    dailyUsed,
+    dailyCap,
+    dailyPercentage,
+    monthlyUsed,
+    monthlyQuota,
+    monthlyPercentage,
+  } = useQuota(currentUser?.id)
+
+  const [loadingTier, setLoadingTier] = useState<string | null>(null)
+  const [isOpeningPortal, setIsOpeningPortal] = useState(false)
+
+  const currentTier: SubscriptionTier = (subscription?.plan_tier as SubscriptionTier) || 'free_trial'
+  const tierConfig = SUBSCRIPTION_TIERS[currentTier] || SUBSCRIPTION_TIERS.free_trial
 
   const tiers = [
-    { id: 'starter', name: 'Starter', price: 29, quota: 50, daily: 5, features: ['2 platforms', 'Review + Auto modes', '6-hour scans', 'Email support'], popular: false },
-    { id: 'pro', name: 'Pro', price: 79, quota: 250, daily: 15, features: ['All platforms', 'Full auto-submit', 'Hourly scans', 'Priority queue', 'Discord support'], popular: true },
-    { id: 'power', name: 'Power', price: 149, quota: 'Unlimited', daily: 50, features: ['Dedicated worker pool', 'Email status parsing', 'Instant discovery', '1-on-1 onboarding'], popular: false },
+    { id: 'starter', name: 'Starter', price: 9, quota: 50, daily: 5, features: ['2 platforms', 'Review + Auto modes', '6-hour scans', 'Email support'], popular: false },
+    { id: 'pro', name: 'Pro', price: 29, quota: 250, daily: 15, features: ['All platforms', 'Full auto-submit', 'Hourly scans', 'Priority queue', 'Discord support'], popular: true },
+    { id: 'power', name: 'Power', price: 79, quota: 'Unlimited', daily: 50, features: ['Dedicated worker pool', 'Email status parsing', 'Instant discovery', '1-on-1 onboarding'], popular: false },
   ]
+
+  const handleCheckout = async (tierId: string) => {
+    if (!currentUser?.id) return
+    setLoadingTier(tierId)
+    try {
+      const res = await fetch('http://localhost:4000/api/billing/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tier: tierId,
+          userId: currentUser.id,
+          successUrl: `${window.location.origin}/billing?upgraded=true`,
+          cancelUrl: `${window.location.origin}/billing?canceled=true`,
+        }),
+      })
+      const data = await res.json()
+      if (data?.url) {
+        window.location.href = data.url
+      }
+    } catch (err) {
+      console.error('Stripe checkout error:', err)
+    } finally {
+      setLoadingTier(null)
+    }
+  }
+
+  const handleOpenPortal = async () => {
+    if (!subscription?.stripe_customer_id) return
+    setIsOpeningPortal(true)
+    try {
+      const res = await fetch('http://localhost:4000/api/billing/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: subscription.stripe_customer_id,
+        }),
+      })
+      const data = await res.json()
+      if (data?.url) {
+        window.location.href = data.url
+      }
+    } catch (err) {
+      console.error('Customer portal error:', err)
+    } finally {
+      setIsOpeningPortal(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-text-primary">Billing & Subscription</h1>
-        <p className="text-text-secondary text-sm">Manage your plan, view usage, and access invoices</p>
+        <p className="text-text-secondary text-sm">Manage your plan, view real-time quota usage, and access invoices</p>
       </div>
 
       {/* Current Plan */}
@@ -26,21 +88,26 @@ export function BillingPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
             <div className="flex items-center gap-3">
-              <span className={cn('px-3 py-1 rounded-full text-sm font-bold', currentTier === 'pro' ? 'bg-accent-primary/20 text-accent-primary' : 'bg-white/5 text-text-secondary')}>
-                {currentTier.toUpperCase()}
+              <span className={cn('px-3 py-1 rounded-full text-sm font-bold', currentTier === 'pro' || currentTier === 'power' ? 'bg-accent-primary/20 text-accent-primary' : 'bg-white/5 text-text-secondary')}>
+                {currentTier.replace('_', ' ').toUpperCase()}
               </span>
               {currentTier === 'pro' && <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-accent-primary to-accent-ai text-xs font-bold text-text-inverse">Popular</span>}
             </div>
             <p className="text-text-secondary text-sm mt-1">
-              ${tierConfig.monthly_quota === 250 ? 79 : tierConfig.monthly_quota === 50 ? 29 : 149} / month · 
-              Next billing: October 23, 2026 · 
-              <button className="text-accent-primary hover:underline">Cancel anytime</button>
+              Status: <span className="text-text-primary font-medium capitalize">{subscription?.status || 'Active'}</span> · 
+              Monthly Quota: <span className="text-accent-secondary font-mono">{tierConfig.monthly_quota} applications</span>
             </p>
           </div>
-          <button className="btn-secondary px-4 py-2 flex items-center gap-2">
-            <CreditCard className="w-4 h-4" />
-            Manage Plan
-          </button>
+          {subscription?.stripe_customer_id ? (
+            <button
+              onClick={handleOpenPortal}
+              disabled={isOpeningPortal}
+              className="btn-secondary px-4 py-2 flex items-center gap-2"
+            >
+              {isOpeningPortal ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+              Manage Stripe Billing
+            </button>
+          ) : null}
         </div>
 
         {/* Usage Meters */}
@@ -48,25 +115,25 @@ export function BillingPage() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-text-secondary">Monthly Usage</span>
-              <span className="text-sm font-mono tabular-nums text-text-primary">{used} / {tierConfig.monthly_quota}</span>
+              <span className="text-sm font-mono tabular-nums text-text-primary">{monthlyUsed} / {monthlyQuota}</span>
             </div>
             <div className="h-2 bg-white/5 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-accent-primary to-accent-ai transition-all duration-500"
-                style={{ width: `${(used / tierConfig.monthly_quota) * 100}%` }}
+                style={{ width: `${monthlyPercentage}%` }}
               />
             </div>
-            <p className="text-xs text-text-muted mt-1">{(used / tierConfig.monthly_quota * 100).toFixed(0)}% used this period</p>
+            <p className="text-xs text-text-muted mt-1">{monthlyPercentage}% used this billing cycle</p>
           </div>
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-text-secondary">Daily Cap Today</span>
-              <span className="text-sm font-mono tabular-nums text-text-primary">{dailyUsed} / {tierConfig.daily_cap}</span>
+              <span className="text-sm font-mono tabular-nums text-text-primary">{dailyUsed} / {dailyCap}</span>
             </div>
             <div className="h-2 bg-white/5 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-accent-warning to-accent-cta transition-all duration-500"
-                style={{ width: `${(dailyUsed / tierConfig.daily_cap) * 100}%` }}
+                style={{ width: `${dailyPercentage}%` }}
               />
             </div>
             <p className="text-xs text-text-muted mt-1">Resets at midnight UTC</p>
@@ -75,18 +142,19 @@ export function BillingPage() {
       </div>
 
       {/* Upgrade Section */}
-      <div className="card-glass p-6 border border-accent-primary/20">
-        <div className="flex items-center gap-3 mb-4">
-          <ArrowUpRight className="w-5 h-5 text-accent-primary" />
-          <h3 className="font-semibold text-text-primary">Upgrade to Power for unlimited applications</h3>
+      {currentTier !== 'power' && (
+        <div className="card-glass p-6 border border-accent-primary/20">
+          <div className="flex items-center gap-3 mb-2">
+            <ArrowUpRight className="w-5 h-5 text-accent-primary" />
+            <h3 className="font-semibold text-text-primary">Upgrade to Pro or Power</h3>
+          </div>
+          <p className="text-text-secondary mb-4 text-sm">Expand your application volume, unlock multi-platform submission, and run high-frequency autonomous scans.</p>
         </div>
-        <p className="text-text-secondary mb-4">Remove all limits, get dedicated infrastructure, and priority support.</p>
-        <button className="btn-cta px-6 py-2">View Plans & Upgrade</button>
-      </div>
+      )}
 
       {/* Plans Comparison */}
       <div>
-        <h2 className="text-xl font-semibold text-text-primary mb-4">Compare Plans</h2>
+        <h2 className="text-xl font-semibold text-text-primary mb-4">Select Plan</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {tiers.map((tier) => (
             <div
@@ -117,45 +185,17 @@ export function BillingPage() {
                   </li>
                 ))}
               </ul>
-              <button className={cn('w-full py-2 rounded-lg font-medium', tier.popular ? 'btn-cta' : 'btn-secondary')}>
-                {tier.id === currentTier ? 'Current Plan' : 'Select Plan'}
+              <button
+                onClick={() => handleCheckout(tier.id)}
+                disabled={loadingTier === tier.id || tier.id === currentTier}
+                className={cn('w-full py-2 rounded-lg font-medium flex items-center justify-center gap-2', tier.popular ? 'btn-cta' : 'btn-secondary')}
+              >
+                {loadingTier === tier.id && <Loader2 className="w-4 h-4 animate-spin" />}
+                {tier.id === currentTier ? 'Current Active Plan' : `Upgrade to ${tier.name}`}
               </button>
             </div>
           ))}
         </div>
-      </div>
-
-      {/* Invoice History */}
-      <div className="card-glass overflow-hidden">
-        <h3 className="px-6 py-4 border-b border-white/5 font-semibold text-text-primary">Invoice History</h3>
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-white/5">
-              {['Date', 'Amount', 'Status', ''].map(col => (
-                <th key={col} className="px-6 py-3 text-left text-sm font-medium text-text-secondary">{col}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              { date: '2026-09-23', amount: '$79.00', status: 'paid' },
-              { date: '2026-08-23', amount: '$79.00', status: 'paid' },
-              { date: '2026-07-23', amount: '$79.00', status: 'paid' },
-              { date: '2026-06-23', amount: '$29.00', status: 'paid' },
-            ].map((inv, idx) => (
-              <tr key={idx} className="border-b border-white/5">
-                <td className="px-6 py-3 text-text-secondary">{inv.date}</td>
-                <td className="px-6 py-3 font-mono tabular-nums text-text-primary">{inv.amount}</td>
-                <td className="px-6 py-3">
-                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-accent-cta/20 text-accent-cta">Paid</span>
-                </td>
-                <td className="px-6 py-3">
-                  <button className="btn-ghost p-1"><Download className="w-4 h-4" /></button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </div>
   )

@@ -1,11 +1,12 @@
 import OpenAI from 'openai'
 import { jsonrepair } from 'jsonrepair'
 
-export const DEFAULT_NVIDIA_MODEL = 'meta/llama-3.2-11b-vision-instruct'
+export const DEFAULT_NVIDIA_MODEL = 'nvidia/llama-3.1-nemotron-70b-instruct'
 export const FALLBACK_NVIDIA_MODELS = [
-  'meta/llama-3.2-11b-vision-instruct',
   'nvidia/llama-3.1-nemotron-70b-instruct',
-  'meta/llama-3.2-90b-vision-instruct',
+  'meta/llama-3.3-70b-instruct',
+  'meta/llama-3.1-70b-instruct',
+  'mistralai/mixtral-8x7b-instruct-v0.1',
 ]
 export const DEFAULT_NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1'
 
@@ -51,24 +52,33 @@ export function cleanAndParseJson<T>(raw: string): T {
   // 1. Strip markdown fences
   let cleaned = raw.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim()
 
-  // 2. Extract first '{' to last '}'
+  // 2. Locate the opening JSON brace
   const start = cleaned.indexOf('{')
-  const end = cleaned.lastIndexOf('}')
-  if (start !== -1 && end !== -1 && end > start) {
-    cleaned = cleaned.substring(start, end + 1)
+  if (start !== -1) {
+    cleaned = cleaned.substring(start)
   }
 
   // 3. Try standard JSON.parse first
   try {
     return JSON.parse(cleaned) as T
   } catch {
-    // 4. Auto-repair malformed JSON (unescaped quotes, control characters, trailing commas)
+    // 4. Try jsonrepair on the full string
     try {
       const repaired = jsonrepair(cleaned)
       return JSON.parse(repaired) as T
-    } catch (err: any) {
+    } catch {
+      // 5. Try extracting between first '{' and last '}'
+      const end = cleaned.lastIndexOf('}')
+      if (end !== -1 && end > 0) {
+        try {
+          const sliceRepaired = jsonrepair(cleaned.substring(0, end + 1))
+          return JSON.parse(sliceRepaired) as T
+        } catch {
+          // Continue to error throw
+        }
+      }
       console.error('Failed to parse LLM JSON after repair. Raw snippet:', raw.slice(0, 300))
-      throw err
+      throw new Error(`Failed to parse LLM JSON response. Length: ${raw.length}`)
     }
   }
 }
@@ -102,18 +112,15 @@ export async function getStructuredCompletion<T>(params: {
           { role: 'user', content: params.userPrompt },
         ],
         temperature: params.temperature ?? 0.1,
-        max_tokens: params.maxTokens ?? 3000,
+        max_tokens: params.maxTokens ?? 6000,
       })
 
       const raw = response.choices[0]?.message?.content || '{}'
       return cleanAndParseJson<T>(raw)
     } catch (err: any) {
       lastError = err
-      // If error is 404/410, try the next fallback model in the list
-      if (err.status === 404 || err.status === 410) {
-        continue
-      }
-      throw err
+      console.warn(`Model ${model} failed (${err.message}). Trying fallback model...`)
+      continue
     }
   }
 

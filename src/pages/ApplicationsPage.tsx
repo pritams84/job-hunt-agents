@@ -6,18 +6,20 @@ import {
   Award,
   Archive,
   Search,
-  Filter,
-  ChevronDown,
   Building2,
   MapPin,
   ExternalLink,
   DollarSign,
+  Briefcase,
+  Sparkles,
+  ArrowRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState, useMemo } from 'react'
-import { useUser } from '@clerk/clerk-react'
-import { useApplications, ApplicationWithJob } from '@/hooks/useApplications'
-import { GlassCard, Button, StatusBadge } from '@/components/ui'
+import { Link } from 'react-router-dom'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { useApplications } from '@/hooks/useApplications'
+import { GlassCard, Button, StatusBadge, Skeleton } from '@/components/ui'
 import { ApplicationStatus } from '@/types'
 
 const COLUMNS = [
@@ -30,63 +32,39 @@ const COLUMNS = [
   { id: 'rejected', title: 'Archived', icon: Archive, color: 'text-neutral-500' },
 ]
 
-// Fallback demo dataset for visual inspection
-const DEMO_APPLICATIONS: Array<{
-  id: string
-  company: string
-  title: string
-  platform: string
-  score: number
-  salary: string
-  location: string
-  status: ApplicationStatus
-  date: string
-}> = [
-  { id: 'demo-1', company: 'Stripe', title: 'Senior Frontend Engineer', platform: 'LinkedIn', score: 92, salary: '$180K-$250K', location: 'Remote, US', status: 'applied', date: '2026-09-20' },
-  { id: 'demo-2', company: 'Vercel', title: 'Lead Frontend Architect', platform: 'Greenhouse', score: 89, salary: '$200K-$300K', location: 'Remote, Global', status: 'interview', date: '2026-09-19' },
-  { id: 'demo-3', company: 'Linear', title: 'Staff Product Engineer', platform: 'Lever', score: 87, salary: '$170K-$240K', location: 'Remote, EU/US', status: 'applied', date: '2026-09-18' },
-  { id: 'demo-4', company: 'Ramp', title: 'Senior Backend Engineer', platform: 'LinkedIn', score: 85, salary: '$180K-$260K', location: 'New York, NY', status: 'applied', date: '2026-09-18' },
-  { id: 'demo-5', company: 'Notion', title: 'Full Stack Engineer', platform: 'Greenhouse', score: 83, salary: '$160K-$230K', location: 'San Francisco, CA', status: 'matched', date: '2026-09-17' },
-  { id: 'demo-6', company: 'Figma', title: 'Frontend Platform Engineer', platform: 'Lever', score: 91, salary: '$190K-$270K', location: 'Remote, US', status: 'applied', date: '2026-09-17' },
-  { id: 'demo-7', company: 'OpenAI', title: 'Applied AI Engineer', platform: 'LinkedIn', score: 78, salary: '$200K-$350K', location: 'San Francisco, CA', status: 'needs_review', date: '2026-09-16' },
-  { id: 'demo-8', company: 'Anthropic', title: 'Research Engineer', platform: 'Greenhouse', score: 82, salary: '$190K-$280K', location: 'San Francisco, CA', status: 'queued', date: '2026-09-16' },
-]
-
 export function ApplicationsPage() {
-  const { user } = useUser()
-  const { applications, updateStatus, isUpdating } = useApplications(user?.id)
+  const { data: currentUser } = useCurrentUser()
+  const { applications, isLoading, updateStatus, isUpdating } = useApplications(currentUser?.id)
 
   const [search, setSearch] = useState('')
   const [view, setView] = useState<'kanban' | 'table'>('kanban')
 
-  // Merge live database applications with demo fallback
-  const allApplications = useMemo(() => {
-    if (applications && applications.length > 0) {
-      return applications.map((app) => ({
-        id: app.id,
-        company: app.job?.company || 'Company',
-        title: app.job?.title || 'Role Title',
-        platform: app.job?.source_platform || 'External ATS',
-        score: 85,
-        salary: app.job?.salary_min
-          ? `$${Math.round(app.job.salary_min / 1000)}k - $${Math.round((app.job.salary_max || app.job.salary_min * 1.3) / 1000)}k`
-          : 'Competitive',
-        location: app.job?.location || 'Remote',
-        status: app.status,
-        date: app.created_at ? new Date(app.created_at).toISOString().split('T')[0] : 'Today',
-      }))
-    }
-    return DEMO_APPLICATIONS
+  // Map live database applications
+  const mappedApplications = useMemo(() => {
+    return (applications || []).map((app) => ({
+      id: app.id,
+      company: app.job?.company || 'Company',
+      title: app.job?.title || 'Role Title',
+      platform: app.job?.source_platform || 'External ATS',
+      score: 85,
+      salary: app.job?.salary_min
+        ? `$${Math.round(app.job.salary_min / 1000)}k - $${Math.round((app.job.salary_max || app.job.salary_min * 1.3) / 1000)}k`
+        : 'Competitive',
+      location: app.job?.location || 'Remote',
+      status: app.status,
+      date: app.created_at ? new Date(app.created_at).toISOString().split('T')[0] : 'Today',
+      url: app.job?.url || '#',
+    }))
   }, [applications])
 
   // Filtered by search
   const filteredApps = useMemo(() => {
-    if (!search.trim()) return allApplications
+    if (!search.trim()) return mappedApplications
     const q = search.toLowerCase()
-    return allApplications.filter(
+    return mappedApplications.filter(
       (app) => app.company.toLowerCase().includes(q) || app.title.toLowerCase().includes(q)
     )
-  }, [allApplications, search])
+  }, [mappedApplications, search])
 
   // Group by Kanban column
   const appsByStatus = useMemo(() => {
@@ -108,10 +86,15 @@ export function ApplicationsPage() {
       rejected: 'rejected',
     }
     const nextStatus = nextMap[currentStatus] || 'applied'
-    try {
-      await updateStatus({ applicationId: appId, newStatus: nextStatus })
-    } catch (e) {
-      console.log('Using local state for demo apps')
+
+    // Only send mutation if valid UUID
+    const isUuid = /^[0-9a-fA-F-]{36}$/.test(appId)
+    if (isUuid) {
+      try {
+        await updateStatus({ applicationId: appId, newStatus: nextStatus })
+      } catch (err) {
+        console.error('Failed to update application status:', err)
+      }
     }
   }
 
@@ -120,7 +103,7 @@ export function ApplicationsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Applications Pipeline</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Applications Pipeline</h1>
           <p className="text-neutral-400 text-sm">
             Live multi-agent Kanban board with Supabase Realtime synchronization
           </p>
@@ -164,19 +147,47 @@ export function ApplicationsPage() {
               className="w-full bg-neutral-950/60 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
           </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="secondary" leftIcon={<Filter className="w-3.5 h-3.5" />}>
-              Filter
-            </Button>
-            <Button size="sm" variant="secondary" leftIcon={<ChevronDown className="w-3.5 h-3.5" />}>
-              Sort
-            </Button>
+          <div className="flex items-center gap-3 text-xs text-neutral-400">
+            <span className="font-mono">{mappedApplications.length} Total Tracked</span>
           </div>
         </div>
       </GlassCard>
 
-      {/* Kanban Board View */}
-      {view === 'kanban' && (
+      {/* Loading Skeleton */}
+      {isLoading ? (
+        <div className="flex gap-4 overflow-x-auto pb-6">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="w-80 flex-shrink-0 space-y-3">
+              <Skeleton className="h-10 w-full rounded-xl" />
+              <Skeleton className="h-32 w-full rounded-xl" />
+              <Skeleton className="h-32 w-full rounded-xl" />
+            </div>
+          ))}
+        </div>
+      ) : mappedApplications.length === 0 ? (
+        /* Empty State */
+        <GlassCard className="p-12 text-center space-y-4 border border-dashed border-white/10">
+          <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto text-indigo-400">
+            <Briefcase className="w-7 h-7" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-lg font-semibold text-white">No Applications in Pipeline Yet</h3>
+            <p className="text-sm text-neutral-400 max-w-md mx-auto">
+              Your autonomous agents will discover live listings, tailor custom resumes, and track submissions here in realtime.
+            </p>
+          </div>
+          <div className="pt-2 flex items-center justify-center gap-3">
+            <Link to="/jobs">
+              <Button variant="cta" size="sm" className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                <span>Explore Live Jobs</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Button>
+            </Link>
+          </div>
+        </GlassCard>
+      ) : view === 'kanban' ? (
+        /* Kanban Board View */
         <div className="flex gap-4 overflow-x-auto pb-6">
           {appsByStatus.map((column) => (
             <div key={column.id} className="w-80 flex-shrink-0 flex flex-col">
@@ -230,7 +241,8 @@ export function ApplicationsPage() {
 
                       <button
                         onClick={() => handleAdvanceStatus(app.id, app.status as ApplicationStatus)}
-                        className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1"
+                        disabled={isUpdating}
+                        className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 disabled:opacity-50"
                       >
                         <span>Move Next</span>
                         <ExternalLink className="w-3 h-3" />
@@ -248,10 +260,8 @@ export function ApplicationsPage() {
             </div>
           ))}
         </div>
-      )}
-
-      {/* Table View */}
-      {view === 'table' && (
+      ) : (
+        /* Table View */
         <GlassCard className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -288,6 +298,7 @@ export function ApplicationsPage() {
                       <Button
                         size="sm"
                         variant="secondary"
+                        disabled={isUpdating}
                         onClick={() => handleAdvanceStatus(app.id, app.status as ApplicationStatus)}
                       >
                         Advance

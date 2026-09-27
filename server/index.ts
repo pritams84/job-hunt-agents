@@ -48,6 +48,10 @@ app.post(
         res.status(400).send(`Webhook Error: ${err.message}`)
         return
       }
+    } else if (process.env.NODE_ENV === 'production') {
+      console.error('❌ Missing Stripe webhook signature or secret in production environment')
+      res.status(400).send('Webhook signature verification is strictly required in production')
+      return
     } else {
       // Development mode fallback when webhook secret is not set
       try {

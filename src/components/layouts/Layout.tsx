@@ -1,4 +1,4 @@
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation, Link } from 'react-router-dom'
 import { SignedIn, SignedOut, UserButton, SignInButton, useUser } from '@clerk/clerk-react'
 import {
   LayoutDashboard,
@@ -47,26 +47,26 @@ export function Layout() {
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
-            <a href="/dashboard" className="flex items-center gap-2 font-bold text-lg text-white">
+            <Link to="/dashboard" className="flex items-center gap-2 font-bold text-lg text-white">
               <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse" />
               <span>JobHunt AI</span>
-            </a>
+            </Link>
           </div>
 
           <nav className="hidden md:flex items-center gap-6">
             {navItems.slice(0, 4).map((item) => {
               const isActive = location.pathname === item.href
               return (
-                <a
+                <Link
                   key={item.href}
-                  href={item.href}
+                  to={item.href}
                   className={cn(
                     'text-xs font-medium transition-colors',
                     isActive ? 'text-indigo-400 font-semibold' : 'text-neutral-400 hover:text-white'
                   )}
                 >
                   {item.label}
-                </a>
+                </Link>
               )
             })}
           </nav>
@@ -114,8 +114,8 @@ export function Layout() {
                 {item.divider && sidebarOpen && (
                   <div className="w-full h-px bg-white/[0.08] my-2" />
                 )}
-                <a
-                  href={item.href}
+                <Link
+                  to={item.href}
                   className={cn(
                     'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
                     isActive
@@ -126,7 +126,7 @@ export function Layout() {
                 >
                   <item.icon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
                   {sidebarOpen && <span>{item.label}</span>}
-                </a>
+                </Link>
               </div>
             )
           })}
